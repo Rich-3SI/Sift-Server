@@ -1,0 +1,49 @@
+services:
+  volume-init:
+    image: node:22-alpine
+    command: ["sh", "-c", "mkdir -p /data && chown -R node:node /data"]
+    user: "0:0"
+    volumes:
+      - sift_quickstart_data:/data
+
+  mock-mcp:
+    build:
+      context: ./mock-mcp
+    environment:
+      QUICKSTART_MCP_TOKEN: quickstart-local-token
+      PORT: "3000"
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  sift-server:
+    build:
+      context: ../..
+      dockerfile: sift-server/Dockerfile
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+      mock-mcp:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SIFT_DB_PATH: /data
+      SIFT_ADMIN_SECRET: ${SIFT_ADMIN_SECRET:-change-me-quickstart-admin}
+    ports:
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:18081:8081"
+    volumes:
+      - ./sift-server.config.json:/etc/sift-server/config.json:ro
+      - sift_quickstart_data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+volumes:
+  sift_quickstart_data:

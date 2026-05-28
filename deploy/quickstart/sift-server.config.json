@@ -1,0 +1,58 @@
+{
+  "instanceId": "quickstart-sift-server",
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "adminPort": 8081
+  },
+  "auth": {
+    "mode": "api-key",
+    "apiKeys": [
+      {
+        "key": "sk-sift-quickstart-dev",
+        "userId": "quickstart-user",
+        "orgId": "quickstart-org",
+        "email": "quickstart@example.test",
+        "description": "Local quickstart API key"
+      }
+    ]
+  },
+  "audit": {
+    "jsonlPath": "/data/audit.jsonl",
+    "webhooks": []
+  },
+  "metadataScan": {
+    "enabled": true,
+    "action": "warn",
+    "includeSchemas": true
+  },
+  "upstreams": [
+    {
+      "name": "quickstart-mock",
+      "url": "http://mock-mcp:3000/mcp",
+      "headers": {
+        "x-quickstart-token": "quickstart-local-token"
+      }
+    }
+  ],
+  "defaultPolicy": {
+    "policies": ["redact-credentials"],
+    "rules": [
+      {
+        "id": "quickstart/block-delete-repo",
+        "description": "Block the quickstart destructive tool before it reaches the upstream.",
+        "match": "(toolName) => toolName === \"delete_repo\"",
+        "condition": { "tools": ["delete_repo"] },
+        "action": "block"
+      }
+    ]
+  },
+  "allowedUsers": {
+    "enforced": true,
+    "emails": ["quickstart@example.test"]
+  },
+  "maxSessions": 25,
+  "sessionTtlMinutes": 10,
+  "blastRadiusLimit": 10,
+  "rateLimitPerMinute": 60
+}

@@ -1,0 +1,23 @@
+{
+	email security@example.com
+}
+
+sift-server.example.com {
+	encode zstd gzip
+
+	@admin path /healthz /readyz /stats /sessions /admin/*
+	handle @admin {
+		# Replace with your VPN, private subnet, or admin jumpbox ranges.
+		@blocked_admin {
+			not remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+		}
+		abort @blocked_admin
+		reverse_proxy 127.0.0.1:8081
+	}
+
+	handle /mcp* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	respond 404
+}

@@ -1,0 +1,36 @@
+# Environment / secrets
+.env
+.env.local
+.env*.local
+deploy/quickstart/.env
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# OS cruft
+.DS_Store
+**/.DS_Store
+
+# Local runtime state
+.sift/
+*.db
+*.sqlite
+*.sqlite3
+audit.jsonl
+sift-audit.jsonl
+
+# Local agent/editor state
+.claude/plans/
+.claude/skills/
+
+# Finder copy artifacts
+* 2
+* 2.*
+* 3
+* 3.*
+* 4
+* 4.*

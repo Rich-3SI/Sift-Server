@@ -1,0 +1,67 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "adminPort": 8081
+  },
+  "auth": {
+    "mode": "api-key-or-jwt",
+    "apiKeys": [
+      {
+        "key": "sk-replace-me-with-long-random-string",
+        "userId": "user-1",
+        "orgId": "org-abc",
+        "email": "engineering@example.com",
+        "description": "Engineering team — read/write",
+        "expiresAt": "2026-12-31T23:59:59.000Z"
+      },
+      {
+        "key": "sk-readonly-replace-me",
+        "userId": "user-2",
+        "orgId": "org-abc",
+        "email": "support@example.com",
+        "description": "Support team — read-only",
+        "revoked": false
+      }
+    ],
+    "jwt": {
+      "issuer": "https://your-idp.example.com/",
+      "audience": "sift-server",
+      "jwksUrl": "https://your-idp.example.com/.well-known/jwks.json",
+      "userIdClaim": "sub",
+      "orgIdClaim": "org_id",
+      "emailClaim": "email",
+      "allowedAlgorithms": ["RS256"]
+    }
+  },
+  "audit": {
+    "jsonlPath": "./sift-audit.jsonl",
+    "webhooks": []
+  },
+  "metadataScan": {
+    "enabled": true,
+    "action": "warn",
+    "includeSchemas": true
+  },
+  "upstreams": [
+    {
+      "name": "filesystem",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/data"]
+    },
+    {
+      "name": "internal-api",
+      "url": "http://internal-mcp:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer replace-with-internal-fastmcp-token"
+      }
+    }
+  ],
+  "defaultPolicy": {
+    "policies": ["block-filesystem-writes", "redact-credentials"],
+    "rules": []
+  },
+  "maxSessions": 1000,
+  "sessionTtlMinutes": 30,
+  "blastRadiusLimit": 10,
+  "rateLimitPerMinute": 60
+}
