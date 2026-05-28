@@ -20,8 +20,8 @@ docker compose version
 ## Clone The Repo
 
 ```bash
-git clone https://github.com/Rich-3SI/Sift.git
-cd Sift
+git clone https://github.com/Rich-3SI/Sift-Server.git
+cd Sift-Server
 ```
 
 ## Start The Stack
@@ -101,5 +101,6 @@ docker compose -f deploy/quickstart/docker-compose.yml down -v
 ## Next Steps
 
 - Read [configuration.md](configuration.md) to connect real upstream MCP servers.
+- Read [installation.md](installation.md) to deploy Sift Server in a production-oriented environment.
 - Read [policy-examples.md](policy-examples.md) to write policies.
 - Read [security-model.md](security-model.md) before exposing Sift Server to a team.
