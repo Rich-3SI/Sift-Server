@@ -5,7 +5,7 @@
  * userId / orgId / optional email through the security evaluation pipeline.
  *
  * Supports static API keys for simple deployments and JWT/OIDC bearer tokens
- * for enterprise identity providers.
+ * for identity providers.
  */
 
 import {

@@ -52,8 +52,6 @@ export interface SiftServerConfig extends SiftConfig {
   sessionTtlMinutes?: number;
   blastRadiusLimit?: number;
   rateLimitPerMinute?: number;
-  /** Optional instance identifier used in heartbeat upserts (defaults to hostname+port). */
-  instanceId?: string;
 }
 
 /** Resolved defaults for runtime use. */
@@ -70,7 +68,6 @@ export interface ResolvedServerOptions {
   sessionTtlMs: number;
   blastRadiusLimit: number;
   rateLimitPerMinute: number;
-  instanceId: string | undefined;
 }
 
 /** Default values applied when the config omits them. */
@@ -92,7 +89,6 @@ export const DEFAULTS: ResolvedServerOptions = {
   sessionTtlMs: 30 * 60 * 1000,
   blastRadiusLimit: 10,
   rateLimitPerMinute: 60,
-  instanceId: undefined,
 };
 
 export function loadServerConfig(configPath: string): SiftServerConfig {
@@ -120,7 +116,6 @@ export function resolveServerOptions(cfg: SiftServerConfig): ResolvedServerOptio
     sessionTtlMs: (cfg.sessionTtlMinutes ?? 30) * 60 * 1000,
     blastRadiusLimit: cfg.blastRadiusLimit ?? DEFAULTS.blastRadiusLimit,
     rateLimitPerMinute: cfg.rateLimitPerMinute ?? DEFAULTS.rateLimitPerMinute,
-    instanceId: cfg.instanceId,
   };
 }
 

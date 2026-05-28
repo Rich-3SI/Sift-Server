@@ -12,7 +12,7 @@
  *                                    │     • pool.route() → upstream Client
  *                                    │     • forward tool call
  *                                    │     • SecurityEngine.inspectOutput()
- *                                    │     • audit (console + SQLite + Supabase)
+ *                                    │     • audit (console + SQLite + optional exports)
  *                                    └─ return result
  *
  * Key differences from SiftProxy (src/proxy.ts):
@@ -20,7 +20,7 @@
  *   • SecurityEngine is SHARED, with rate/blast counters scoped by tenant/session.
  *   • Each session is created from a bearer token → TenantContext; rules are
  *     resolved per-user via ConfigStore.resolveRules(userId).
- *   • Audit entries carry orgId so the Supabase handler can persist them.
+ *   • Audit entries carry orgId so downstream exports can preserve tenant context.
  */
 
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
@@ -94,7 +94,7 @@ export class SiftServer {
   private sweepTimer: NodeJS.Timeout | null = null;
   private readonly startedAt = new Date().toISOString();
 
-  // Lightweight counters so heartbeat can report them without touching audit_logs.
+  // Lightweight counters for health and admin status.
   private toolCallsTotal = 0;
   private toolCallsBlocked = 0;
 
@@ -160,7 +160,7 @@ export class SiftServer {
     }
   }
 
-  /** Snapshot of currently-tracked stats — consumed by heartbeat + admin endpoints. */
+  /** Snapshot of currently-tracked stats for health and admin endpoints. */
   stats(): ServerStats {
     return {
       activeSessions: this.sessions.size,
@@ -630,12 +630,9 @@ export class SiftServer {
   }
 
   /**
-   * SecurityEngine.audit() builds its own AuditEntry from GenericToolCall — but
-   * GenericToolCall doesn't carry orgId. We need orgId on the entry for the
-   * Supabase handler, so intercept by calling the engine's audit() then mutating.
-   *
-   * Rather than mutate post-facto, we duplicate the entry construction here
-   * using the same shape as SecurityEngine.audit() but with orgId included.
+   * SecurityEngine.audit() builds its own AuditEntry from GenericToolCall, but
+   * GenericToolCall does not carry orgId. We duplicate the entry construction
+   * here so audit rows keep tenant context without mutating post-facto.
    */
   private async auditWithOrg(
     call: GenericToolCall,

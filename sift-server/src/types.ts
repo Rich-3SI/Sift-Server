@@ -12,7 +12,7 @@ import type { JsonWebKey } from "node:crypto";
 export interface TenantContext {
   /** Identifier of the user whose API key was presented. */
   userId: string;
-  /** Organization ID — required for Supabase audit attribution. */
+  /** Organization ID — included in audit rows and policy context. */
   orgId: string;
   /** Optional email for allowed-users enforcement. */
   email?: string;
@@ -22,7 +22,7 @@ export interface TenantContext {
 
 /**
  * An API key entry in the sift-server config.
- * v1: static keys defined in config; v2: also lookup from Supabase.
+ * Static keys defined in config.
  */
 export interface ApiKeyEntry {
   /** Opaque bearer token presented by the client. */
@@ -76,7 +76,7 @@ export interface SessionInfo {
   toolCalls: number;
 }
 
-/** Statistics snapshot for heartbeat reporting. */
+/** Statistics snapshot for health and admin endpoints. */
 export interface ServerStats {
   activeSessions: number;
   upstreamCount: number;

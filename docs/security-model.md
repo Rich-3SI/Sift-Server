@@ -66,7 +66,7 @@ Rules are first-match-wins. Put narrow high-confidence blocks before broad allow
 
 ## What Sift Does Not Replace
 
-Sift is not a complete enterprise security platform by itself. It does not replace:
+Sift is not a complete security platform by itself. It does not replace:
 
 - Endpoint security.
 - Network controls.

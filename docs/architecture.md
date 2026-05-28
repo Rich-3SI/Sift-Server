@@ -35,7 +35,7 @@ Upstream MCP server(s)
 | Rule engine | `src/rules/` | Built-in detectors, condition DSL, sandboxed custom predicates |
 | Templates | `src/templates.ts` | Built-in security policies |
 | Upstream pool | `src/upstream-pool.ts` | MCP upstream connections and tool-name routing |
-| Audit | `src/audit.ts` | Console, SQLite, Supabase, JSONL, and webhook audit handlers |
+| Audit | `src/audit.ts` | Console, SQLite, JSONL, and webhook audit handlers |
 | Metadata scanner | `src/metadata-scan.ts` | Scans tools, resources, prompts, and returned metadata for risky content |
 | Admin API | `sift-server/src/admin.ts` | Reload, session disconnect, and policy simulation |
 

@@ -169,8 +169,3 @@ Actions:
 |---|---|
 | `SIFT_DB_PATH` | Directory for local SQLite audit database |
 | `SIFT_ADMIN_SECRET` | Required for `/stats`, `/sessions`, and `/admin/*` |
-| `SIFT_ORG_ID` | Organization scope for enterprise backend sync and heartbeat |
-| `SUPABASE_URL` | Optional Supabase backend URL |
-| `SUPABASE_ANON_KEY` | Optional Supabase anonymous key |
-| `SIFT_DASHBOARD_INGEST_URL` | Optional remote ingest base URL for audit, heartbeat, and policy sync |
-| `SIFT_INGEST_SECRET` | Shared bearer secret for remote ingest APIs |

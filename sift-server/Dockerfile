@@ -3,7 +3,7 @@
 # Build: docker build -f sift-server/Dockerfile -t sift-server:latest .
 # Run:   docker run -p 8080:8080 -p 8081:8081 \
 #          -v /etc/sift-server/config.json:/etc/sift-server/config.json \
-#          -e SUPABASE_URL=... -e SUPABASE_ANON_KEY=... -e SIFT_ORG_ID=... \
+#          -e SIFT_ADMIN_SECRET=... \
 #          sift-server:latest
 #
 # IMPORTANT: the build context must be the REPO ROOT because sift-server's

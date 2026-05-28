@@ -15,12 +15,9 @@ Use this path for clients that cannot run a local stdio proxy, including hosted 
 sift-server --config ./sift-server.config.json
 ```
 
-Required environment for enterprise policy sync, audit forwarding, and heartbeat:
+Required environment:
 
 ```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-supabase-anon-key
-SIFT_ORG_ID=your-org-id
 SIFT_DB_PATH=/var/lib/sift
 SIFT_ADMIN_SECRET=long-random-admin-secret
 ```

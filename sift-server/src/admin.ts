@@ -4,7 +4,6 @@
  * The health/admin HTTP listener (health.ts) delegates authenticated mutation
  * endpoints to these handlers:
  *
- *   POST /admin/reload   → force a Supabase policy re-sync (requires SIFT_ADMIN_SECRET)
  *   POST /admin/disconnect/:sessionId  → terminate a specific session
  *   POST /admin/simulate → dry-run policy evaluation for a tool call
  *
@@ -61,15 +60,6 @@ async function handleAdminAsync(
   if (!adminAuth(req)) {
     res.writeHead(401, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Admin auth required" }));
-    return true;
-  }
-
-  if (url === "/admin/reload" && req.method === "POST") {
-    // Supabase sync is driven by startSupabaseSync's interval; we don't expose a
-    // direct trigger yet. Respond 200 to signal that the caller can wait for
-    // the next cycle (up to 30s).
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", note: "Next Supabase sync within 30s" }));
     return true;
   }
 
