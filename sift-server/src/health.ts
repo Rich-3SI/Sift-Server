@@ -3,7 +3,7 @@
  *
  *   GET /healthz  → 200 once the process is up (liveness)
  *   GET /readyz   → 200 when the upstream pool is connected (readiness)
- *   GET /stats    → JSON snapshot of server counters (consumed by dashboard + ops)
+ *   GET /stats    → JSON snapshot of server counters
  *   GET /sessions → JSON array of active sessions (admin — intended for trusted networks)
  *
  * Listens on a separate port from the MCP endpoint so operators can restrict

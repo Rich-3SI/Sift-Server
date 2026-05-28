@@ -100,7 +100,7 @@ npm run docker:build
 
 | Path | Purpose |
 |---|---|
-| `sift-server/` | HTTP MCP gateway, auth, config, admin, health, and heartbeat code |
+| `sift-server/` | HTTP MCP gateway, auth, config, admin, and health code |
 | `src/` | Shared policy engine, audit handlers, metadata scanner, templates, and upstream pool |
 | `deploy/quickstart/` | Public Docker quickstart |
 | `test/` | Shared core tests used by Sift Server |

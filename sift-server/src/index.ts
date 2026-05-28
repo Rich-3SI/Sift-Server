@@ -5,11 +5,10 @@
  *
  * Boots:
  *   - Config loader + validation
- *   - ConfigStore (with optional Supabase sync)
+ *   - ConfigStore
  *   - Shared UpstreamPool (connects to all upstream MCP servers)
  *   - SiftServer (HTTP/StreamableHTTP firewall + per-session MCP servers)
  *   - Admin/health HTTP listener
- *   - Heartbeat to Supabase (when SUPABASE_URL + SIFT_ORG_ID are set)
  */
 
 import { ConfigStore } from "../../src/config-store.js";
@@ -18,8 +17,6 @@ import {
   consoleAudit,
   jsonlAudit,
   sqliteAudit,
-  supabaseAudit,
-  startSupabaseAuditFlushJob,
   webhookAudit,
   type AuditHandler,
 } from "../../src/audit.js";
@@ -27,7 +24,6 @@ import { UpstreamPool } from "../../src/upstream-pool.js";
 import { loadServerConfig, resolveServerOptions } from "./config.js";
 import { SiftServer } from "./server.js";
 import { startHealthServer } from "./health.js";
-import { startServerHeartbeat } from "./heartbeat.js";
 
 interface CliArgs {
   configPath: string;
@@ -56,8 +52,6 @@ function printHelp(): void {
       `  -c, --config <path>   Path to sift-server.config.json (default: ./sift-server.config.json)\n` +
       `  -h, --help            Print this message and exit\n\n` +
       `Environment variables:\n` +
-      `  SUPABASE_URL / SUPABASE_ANON_KEY   Enable cloud policy sync + audit + heartbeat\n` +
-      `  SIFT_ORG_ID                        Required for enterprise features\n` +
       `  SIFT_DB_PATH                       Local SQLite audit path (default ~/.sift)\n` +
       `  SIFT_ADMIN_SECRET                  Required for admin mutation endpoints\n`
   );
@@ -73,28 +67,11 @@ async function main(): Promise<void> {
   const cfg = loadServerConfig(args.configPath);
   const opts = resolveServerOptions(cfg);
 
-  // 1. Config store — resolves rules per user and optionally syncs from Supabase.
+  // 1. Config store — resolves rules per user from local config.
   const configStore = new ConfigStore(cfg);
-  const dashboardIngestUrl = process.env["SIFT_DASHBOARD_INGEST_URL"] ?? process.env["SIFT_DASHBOARD_URL"];
-  const ingestSecret = process.env["SIFT_INGEST_SECRET"];
-  const supabaseUrl = process.env["SUPABASE_URL"];
-  const supabaseKey = process.env["SUPABASE_ANON_KEY"];
-  const orgId = process.env["SIFT_ORG_ID"];
-  if (dashboardIngestUrl && ingestSecret) {
-    configStore.startDashboardSync(dashboardIngestUrl, ingestSecret, 30_000);
-    startSupabaseAuditFlushJob();
-  } else if (supabaseUrl && supabaseKey) {
-    configStore.startSupabaseSync(supabaseUrl, supabaseKey, 30_000, orgId);
-    startSupabaseAuditFlushJob();
-  } else {
-    process.stderr.write(
-      "[Sift Server] No enterprise backend credentials set — running with local config only.\n"
-    );
-  }
 
-  // 2. Audit handlers — console + local SQLite; Supabase is only active when an entry
-  //    carries an orgId (set from TenantContext during request handling).
-  const auditHandlers: AuditHandler[] = [consoleAudit, sqliteAudit, supabaseAudit];
+  // 2. Audit handlers — console + local SQLite, with optional JSONL/webhook exports.
+  const auditHandlers: AuditHandler[] = [consoleAudit, sqliteAudit];
   if (cfg.audit?.jsonlPath) {
     auditHandlers.push(jsonlAudit(cfg.audit.jsonlPath));
   }
@@ -120,18 +97,9 @@ async function main(): Promise<void> {
   // 5. Health + admin HTTP listener.
   startHealthServer(opts.adminPort, pool, server, configStore);
 
-  // 6. Heartbeat — reports live status + tool call counters to Supabase.
-  const stopHeartbeat = startServerHeartbeat({
-    pool,
-    server,
-    options: opts,
-    orgId,
-  });
-
-  // 7. Graceful shutdown.
+  // 6. Graceful shutdown.
   const shutdown = async (): Promise<void> => {
     process.stderr.write("[Sift Server] Shutting down...\n");
-    stopHeartbeat?.();
     await server.stop();
     await pool.closeAll();
     process.exit(0);

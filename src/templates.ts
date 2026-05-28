@@ -790,7 +790,7 @@ export function resolveTemplates(policyIds: string[]): SiftRule[] {
   return rules;
 }
 
-/** List all available templates (used by dashboard and CLI). */
+/** List all available templates. */
 export function listTemplates(): RuleTemplate[] {
   return TEMPLATES;
 }

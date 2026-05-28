@@ -124,7 +124,7 @@ export interface SecurityEngineOptions {
   blastRadiusLimit?: number;
   /** Max tool calls per user per minute. 0 = unlimited. */
   rateLimitPerMinute?: number;
-  /** Organisation ID — included in every audit entry so Supabase can scope records to the right org. */
+  /** Organisation ID — included in audit entries and policy context. */
   orgId?: string;
 }
 
