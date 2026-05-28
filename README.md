@@ -20,8 +20,8 @@ Use it when you want AI agents to use tools without giving every agent unlimited
 Run Sift Server in front of a tiny demo MCP upstream:
 
 ```bash
-git clone https://github.com/Rich-3SI/Sift.git
-cd Sift
+git clone https://github.com/Rich-3SI/Sift-Server.git
+cd Sift-Server
 ```
 
 Check prerequisites:
@@ -89,6 +89,7 @@ npm run docker:build
 ## Documentation
 
 - [Quickstart](docs/quickstart.md)
+- [Installation](docs/installation.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Configuration](docs/configuration.md)
