@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { SecurityEngine, RateLimiter, type GenericToolCall } from "../src/engine.js";
+import { type AuditEntry } from "../src/audit.js";
 import { type SiftRule } from "../src/rules/index.js";
 import { resolveTemplates } from "../src/templates.js";
 
@@ -83,6 +84,62 @@ describe("SecurityEngine", () => {
     assert.equal(verdict.action, "redact");
     assert.ok(verdict.sanitizedInput);
     assert.ok(JSON.stringify(verdict.sanitizedInput).includes("[REDACTED:SSN]"));
+  });
+
+  it("redacts credential-shaped values when action is redact", () => {
+    const rules: SiftRule[] = [{
+      id: "redact-credentials",
+      description: "Redact credentials",
+      match: '() => true',
+      action: "redact",
+    }];
+    const engine = makeEngine(rules);
+    const verdict = engine.evaluateInput(makeCall("send_data", {
+      password: "hunter2",
+      nested: { apiKey: "sk-prod-secret" },
+      header: "Authorization: Bearer abc.def.ghi",
+    }));
+
+    assert.equal(verdict.action, "redact");
+    assert.equal(JSON.stringify(verdict.sanitizedInput).includes("hunter2"), false);
+    assert.equal(JSON.stringify(verdict.sanitizedInput).includes("sk-prod-secret"), false);
+    assert.equal(JSON.stringify(verdict.sanitizedInput).includes("abc.def.ghi"), false);
+  });
+
+  it("audits sanitized input and output when action is redact", async () => {
+    const entries: AuditEntry[] = [];
+    const rules: SiftRule[] = [{
+      id: "redact-sensitive",
+      description: "Redact sensitive data",
+      match: '() => true',
+      action: "redact",
+    }];
+    const engine = new SecurityEngine({
+      getRules: () => rules,
+      onAudit: async (entry) => { entries.push(entry); },
+    });
+    const call = makeCall("send_data", {
+      email: "alice@example.com",
+      password: "hunter2",
+    });
+    const verdict = engine.evaluateInput(call);
+    const output = {
+      content: [{ type: "text", text: "SSN 123-45-6789 token=abc123" }],
+      apiKey: "sk-output-secret",
+    };
+    const inspection = engine.inspectOutput(output, verdict);
+
+    await engine.audit(call, verdict, output, inspection, 1);
+
+    assert.equal(entries.length, 1);
+    const serialized = JSON.stringify(entries[0]);
+    assert.equal(serialized.includes("alice@example.com"), false);
+    assert.equal(serialized.includes("hunter2"), false);
+    assert.equal(serialized.includes("123-45-6789"), false);
+    assert.equal(serialized.includes("abc123"), false);
+    assert.equal(serialized.includes("sk-output-secret"), false);
+    assert.equal(serialized.includes("[REDACTED:EMAIL]"), true);
+    assert.equal(serialized.includes("[REDACTED:CREDENTIAL]"), true);
   });
 
   it("inspects output for PII", () => {

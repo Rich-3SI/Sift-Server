@@ -12,8 +12,7 @@ import {
   type SiftRule,
   evaluateRules,
   containsPii,
-  redactPii,
-  redactPiiDeep,
+  redactSensitiveDeep,
   detectInjection,
   BlastRadiusLimiter,
 } from "./rules/index.js";
@@ -220,10 +219,10 @@ export class SecurityEngine {
     const piiDetected = containsPii(call.input);
     const injectionDetected = detectInjection(call.input).detected;
 
-    // 4. If action=redact and PII found, sanitize input
+    // 4. If action=redact, sanitize PII and credential-shaped values.
     let sanitizedInput: Record<string, unknown> | undefined;
-    if (ruleResult.action === "redact" && piiDetected) {
-      sanitizedInput = redactPiiDeep(call.input) as Record<string, unknown>;
+    if (ruleResult.action === "redact") {
+      sanitizedInput = redactSensitiveDeep(call.input) as Record<string, unknown>;
     }
 
     return {
@@ -264,8 +263,8 @@ export class SecurityEngine {
     const injectionDetected = detectInjection(output).detected;
 
     let sanitizedOutput: unknown | undefined;
-    if (verdict.action === "redact" && piiDetected) {
-      sanitizedOutput = redactPiiDeep(output);
+    if (verdict.action === "redact") {
+      sanitizedOutput = redactSensitiveDeep(output);
     }
 
     return { piiDetected, injectionDetected, sanitizedOutput };
@@ -285,8 +284,8 @@ export class SecurityEngine {
       id: verdict.id,
       timestamp: new Date().toISOString(),
       tool: call.tool,
-      input: call.input,
-      output,
+      input: verdict.sanitizedInput ?? call.input,
+      output: outputInspection.sanitizedOutput ?? output,
       action: verdict.action,
       triggeredRules: verdict.triggeredRules,
       durationMs,
