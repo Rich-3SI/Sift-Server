@@ -25,6 +25,22 @@ export const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   },
 ];
 
+const SENSITIVE_KEY_PATTERN =
+  /api[_-]?key|password|passwd|secret|token|bearer|private[_-]?key|access[_-]?key|authorization|credential/i;
+
+const CREDENTIAL_VALUE_PATTERNS: Array<{ name: string; pattern: RegExp; replace: string }> = [
+  {
+    name: "BEARER",
+    pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi,
+    replace: "$1[REDACTED:BEARER]",
+  },
+  {
+    name: "CREDENTIAL",
+    pattern: /\b(api[_-]?key|password|passwd|secret|token|access[_-]?key)\b\s*[:=]\s*["']?[^"',\s&}]+/gi,
+    replace: "$1=[REDACTED:CREDENTIAL]",
+  },
+];
+
 export function containsPii(value: unknown): boolean {
   const text = JSON.stringify(value);
   return PII_PATTERNS.some(({ pattern }) => {
@@ -38,6 +54,15 @@ export function redactPii(text: string): string {
   for (const { name, pattern } of PII_PATTERNS) {
     pattern.lastIndex = 0;
     result = result.replace(pattern, `[REDACTED:${name}]`);
+  }
+  return result;
+}
+
+export function redactCredentials(text: string): string {
+  let result = text;
+  for (const { pattern, replace } of CREDENTIAL_VALUE_PATTERNS) {
+    pattern.lastIndex = 0;
+    result = result.replace(pattern, replace);
   }
   return result;
 }
@@ -58,6 +83,31 @@ export function redactPiiDeep(value: unknown): unknown {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       result[k] = redactPiiDeep(v);
+    }
+    return result;
+  }
+  return value;
+}
+
+/**
+ * Redact PII plus credential-shaped fields and inline credential values.
+ * Used when a policy returns action=redact.
+ */
+export function redactSensitiveDeep(value: unknown, key?: string): unknown {
+  if (key && SENSITIVE_KEY_PATTERN.test(key)) {
+    if (value === null || value === undefined) return value;
+    return "[REDACTED:CREDENTIAL]";
+  }
+  if (typeof value === "string") {
+    return redactCredentials(redactPii(value));
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveDeep(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      result[childKey] = redactSensitiveDeep(childValue, childKey);
     }
     return result;
   }

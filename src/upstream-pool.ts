@@ -240,9 +240,7 @@ export class UpstreamPool {
       { capabilities: {} }
     );
 
-    const envOverride = server.env
-      ? { ...(process.env as Record<string, string>), ...server.env }
-      : undefined;
+    const envOverride = server.env ? { ...server.env } : undefined;
 
     const transport = new StdioClientTransport({ command: exe!, args, env: envOverride });
     await client.connect(transport);

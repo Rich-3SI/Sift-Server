@@ -14,6 +14,8 @@ import { UpstreamPool } from "../../src/upstream-pool.js";
 import { SiftServer } from "../src/server.js";
 import { resolveServerOptions } from "../src/config.js";
 import { startHealthServer } from "../src/health.js";
+import { SecurityEngine, type GenericToolCall } from "../../src/engine.js";
+import { type AuditEntry } from "../../src/audit.js";
 
 const TEST_PORT = 18080;
 const TEST_ADMIN_PORT = 18081;
@@ -165,5 +167,70 @@ describe("SiftServer admin health endpoints", () => {
         process.env["SIFT_ADMIN_SECRET"] = previous;
       }
     }
+  });
+});
+
+describe("SiftServer audit redaction", () => {
+  it("persists sanitized audit entries when a redact verdict is applied", async () => {
+    const audits: AuditEntry[] = [];
+    const configStore = new ConfigStore({
+      upstreams: [{ name: "stub", command: ["node", "--version"] }],
+      defaultPolicy: { policies: [], rules: [] },
+    });
+    const server = new SiftServer({
+      configStore,
+      pool: new UpstreamPool(),
+      auditHandler: async (entry) => { audits.push(entry); },
+      options: resolveServerOptions({
+        upstreams: configStore.get().upstreams,
+        auth: {
+          mode: "api-key",
+          apiKeys: [{ key: "sk-test-valid", userId: "alice", orgId: "org-test" }],
+        },
+      }),
+    });
+    const engine = new SecurityEngine({
+      getRules: () => [{
+        id: "redact-sensitive",
+        description: "Redact sensitive data",
+        match: '() => true',
+        action: "redact",
+      }],
+      onAudit: async () => {},
+    });
+    const call: GenericToolCall = {
+      tool: "send_data",
+      input: { email: "alice@example.com", password: "hunter2" },
+      protocol: "mcp",
+      userId: "alice",
+      orgId: "org-test",
+      sessionId: "session-1",
+      clientName: "sift-server/test",
+    };
+    const verdict = engine.evaluateInput(call);
+    const output = {
+      content: [{ type: "text", text: "SSN 123-45-6789 token=abc123" }],
+      apiKey: "sk-output-secret",
+    };
+    const inspection = engine.inspectOutput(output, verdict);
+
+    await (server as unknown as {
+      auditWithOrg: (
+        toolCall: GenericToolCall,
+        toolVerdict: ReturnType<SecurityEngine["evaluateInput"]>,
+        toolOutput: unknown,
+        outputInspection: ReturnType<SecurityEngine["inspectOutput"]>,
+        durationMs: number,
+        orgId: string
+      ) => Promise<void>;
+    }).auditWithOrg(call, verdict, output, inspection, 1, "org-test");
+
+    assert.equal(audits.length, 1);
+    const serialized = JSON.stringify(audits[0]);
+    assert.equal(serialized.includes("alice@example.com"), false);
+    assert.equal(serialized.includes("hunter2"), false);
+    assert.equal(serialized.includes("123-45-6789"), false);
+    assert.equal(serialized.includes("abc123"), false);
+    assert.equal(serialized.includes("sk-output-secret"), false);
   });
 });
