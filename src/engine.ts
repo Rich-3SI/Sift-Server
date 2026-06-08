@@ -24,6 +24,10 @@ import { type AuditEntry, type AuditHandler } from "./audit.js";
 export interface GenericToolCall {
   /** Tool/function name. */
   tool: string;
+  /** Original upstream tool name when the exposed name was collision-prefixed. */
+  originalTool?: string;
+  /** Upstream server that owns this tool, when known. */
+  upstreamName?: string;
   /** Arguments as a JSON-serializable object. */
   input: Record<string, unknown>;
   /** Protocol that originated this call (e.g. "mcp", "openai", "anthropic"). */
@@ -196,7 +200,10 @@ export class SecurityEngine {
     includeStatefulChecks: boolean
   ): SecurityVerdict {
     const triggeredRules: string[] = [];
-    const ruleResult = evaluateRules(rules, call.tool, call.input);
+    const toolAliases = call.originalTool && call.originalTool !== call.tool
+      ? [call.originalTool]
+      : [];
+    const ruleResult = evaluateRules(rules, call.tool, call.input, toolAliases);
     triggeredRules.push(...ruleResult.triggeredRules);
 
     if (ruleResult.action === "block") {

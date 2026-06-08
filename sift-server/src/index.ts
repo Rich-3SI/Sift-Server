@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   await server.start();
 
   // 5. Health + admin HTTP listener.
-  startHealthServer(opts.adminPort, pool, server, configStore);
+  startHealthServer(opts.adminPort, opts.adminHost, pool, server, configStore);
 
   // 6. Graceful shutdown.
   const shutdown = async (): Promise<void> => {

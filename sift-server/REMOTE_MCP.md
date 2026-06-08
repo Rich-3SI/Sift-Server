@@ -29,7 +29,8 @@ SIFT_ADMIN_SECRET=long-random-admin-secret
   "server": {
     "host": "0.0.0.0",
     "port": 8080,
-    "adminPort": 8081
+    "adminPort": 8081,
+    "adminHost": "127.0.0.1"
   },
   "auth": {
     "mode": "api-key",

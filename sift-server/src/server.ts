@@ -36,6 +36,8 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   type CallToolResult,
+  type GetPromptResult,
+  type ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { SecurityEngine, type GenericToolCall } from "../../src/engine.js";
@@ -53,7 +55,7 @@ import {
 
 import type { ResolvedServerOptions } from "./config.js";
 import type { SessionInfo, TenantContext, ServerStats } from "./types.js";
-import { buildKeyIndex, extractBearerToken, validateApiKey, validateJwtToken } from "./auth.js";
+import { buildKeyIndex, extractBearerToken, validateApiKey, validateJwtToken, type ApiKeyIndexEntry } from "./auth.js";
 
 export interface SiftServerOptions {
   configStore: ConfigStore;
@@ -88,7 +90,7 @@ export class SiftServer {
   private readonly auditHandler: AuditHandler;
   private readonly opts: ResolvedServerOptions;
   private readonly engine: SecurityEngine;
-  private readonly keyIndex: Map<string, TenantContext>;
+  private readonly keyIndex: Map<string, ApiKeyIndexEntry>;
   private readonly sessions = new Map<string, SessionEntry>();
   private httpServer: HttpServer | null = null;
   private sweepTimer: NodeJS.Timeout | null = null;
@@ -202,7 +204,9 @@ export class SiftServer {
     const route = this.pool.route(request.tool);
     const originalToolName = route?.originalName ?? request.tool;
     const call: GenericToolCall = {
-      tool: originalToolName,
+      tool: request.tool,
+      originalTool: route?.originalName,
+      upstreamName: route?.serverName,
       input,
       protocol: "mcp",
       userId: request.userId ?? "simulation",
@@ -409,8 +413,8 @@ export class SiftServer {
     });
     mcp.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       await this.pool.waitForAll();
-      const result = await this.pool.readResource(request.params.uri);
-      return this.scanMetadataObject("resource-result", result, session.tenant, sessionId);
+      session.lastActivity = Date.now();
+      return this.handleResourceRead(session.tenant, sessionId, request.params.uri);
     });
     mcp.setRequestHandler(ListPromptsRequestSchema, async () => {
       await this.pool.waitForAll();
@@ -421,8 +425,13 @@ export class SiftServer {
     });
     mcp.setRequestHandler(GetPromptRequestSchema, async (request) => {
       await this.pool.waitForAll();
-      const result = await this.pool.getPrompt(request.params.name, request.params.arguments);
-      return this.scanMetadataObject("prompt-result", result, session.tenant, sessionId);
+      session.lastActivity = Date.now();
+      return this.handlePromptGet(
+        session.tenant,
+        sessionId,
+        request.params.name,
+        request.params.arguments
+      );
     });
   }
 
@@ -476,7 +485,9 @@ export class SiftServer {
     }
 
     const call: GenericToolCall = {
-      tool: route.originalName,
+      tool: toolName,
+      originalTool: route.originalName,
+      upstreamName: route.serverName,
       input,
       protocol: "mcp",
       userId: tenant.userId,
@@ -547,9 +558,119 @@ export class SiftServer {
         tenant.orgId
       );
       return {
-        content: [{ type: "text", text: `[Sift Server] Upstream error: ${errMsg}` }],
+        content: [{ type: "text", text: `[Sift Server] Upstream error: ${this.safeErrorText(errMsg, outputInspection)}` }],
         isError: true,
       };
+    }
+  }
+
+  private async handleResourceRead(
+    tenant: TenantContext,
+    sessionId: string,
+    uri: string
+  ): Promise<ReadResourceResult> {
+    const startTime = Date.now();
+    const input = { uri };
+    const call: GenericToolCall = {
+      tool: "mcp.read_resource",
+      input,
+      protocol: "mcp",
+      userId: tenant.userId,
+      orgId: tenant.orgId,
+      sessionId,
+      clientName: "sift-server/resource",
+    };
+    const verdict = this.engine.evaluateInput(call);
+
+    if (verdict.action === "block") {
+      const outputInspection = this.engine.inspectOutput(null, verdict);
+      await this.auditWithOrg(call, verdict, null, outputInspection, Date.now() - startTime, tenant.orgId);
+      throw new Error(`[Sift Server] ${verdict.blockReason}`);
+    }
+
+    try {
+      const forwardInput = verdict.sanitizedInput ?? input;
+      const forwardUri = typeof forwardInput.uri === "string" ? forwardInput.uri : uri;
+      const upstreamResult = await this.pool.readResource(forwardUri);
+      const outputInspection = this.engine.inspectOutput(upstreamResult, verdict);
+      await this.auditWithOrg(
+        call,
+        verdict,
+        upstreamResult,
+        outputInspection,
+        Date.now() - startTime,
+        tenant.orgId
+      );
+      const finalResult = outputInspection.sanitizedOutput ?? upstreamResult;
+      return this.scanMetadataObject("resource-result", finalResult as ReadResourceResult, tenant, sessionId);
+    } catch (err) {
+      const errMsg = String(err);
+      const outputInspection = this.engine.inspectOutput({ error: errMsg }, verdict);
+      await this.auditWithOrg(
+        call,
+        verdict,
+        { error: errMsg },
+        outputInspection,
+        Date.now() - startTime,
+        tenant.orgId
+      );
+      throw new Error(`[Sift Server] Resource error: ${this.safeErrorText(errMsg, outputInspection)}`);
+    }
+  }
+
+  private async handlePromptGet(
+    tenant: TenantContext,
+    sessionId: string,
+    name: string,
+    args?: Record<string, string>
+  ): Promise<GetPromptResult> {
+    const startTime = Date.now();
+    const input = { name, arguments: args ?? {} };
+    const call: GenericToolCall = {
+      tool: "mcp.get_prompt",
+      input,
+      protocol: "mcp",
+      userId: tenant.userId,
+      orgId: tenant.orgId,
+      sessionId,
+      clientName: "sift-server/prompt",
+    };
+    const verdict = this.engine.evaluateInput(call);
+
+    if (verdict.action === "block") {
+      const outputInspection = this.engine.inspectOutput(null, verdict);
+      await this.auditWithOrg(call, verdict, null, outputInspection, Date.now() - startTime, tenant.orgId);
+      throw new Error(`[Sift Server] ${verdict.blockReason}`);
+    }
+
+    try {
+      const forwardInput = verdict.sanitizedInput ?? input;
+      const forwardName = typeof forwardInput.name === "string" ? forwardInput.name : name;
+      const forwardArgs = isStringRecord(forwardInput.arguments) ? forwardInput.arguments : args;
+      const upstreamResult = await this.pool.getPrompt(forwardName, forwardArgs);
+      const outputInspection = this.engine.inspectOutput(upstreamResult, verdict);
+      await this.auditWithOrg(
+        call,
+        verdict,
+        upstreamResult,
+        outputInspection,
+        Date.now() - startTime,
+        tenant.orgId
+      );
+      const finalResult = outputInspection.sanitizedOutput ?? upstreamResult;
+      return this.scanMetadataObject("prompt-result", finalResult as GetPromptResult, tenant, sessionId);
+    } catch (err) {
+      const errMsg = String(err);
+      const outputInspection = this.engine.inspectOutput({ error: errMsg }, verdict);
+      await this.auditWithOrg(
+        call,
+        verdict,
+        { error: errMsg },
+        outputInspection,
+        Date.now() - startTime,
+        tenant.orgId
+      );
+      throw new Error(`[Sift Server] Prompt error: ${this.safeErrorText(errMsg, outputInspection)}`);
     }
   }
 
@@ -561,6 +682,18 @@ export class SiftServer {
       "WWW-Authenticate": `Bearer realm="sift-server"`,
     });
     res.end(JSON.stringify({ error: "Unauthorized" }));
+  }
+
+  private safeErrorText(
+    errMsg: string,
+    inspection: ReturnType<SecurityEngine["inspectOutput"]>
+  ): string {
+    const sanitized = inspection.sanitizedOutput;
+    if (sanitized && typeof sanitized === "object") {
+      const value = (sanitized as Record<string, unknown>)["error"];
+      if (typeof value === "string") return value;
+    }
+    return errMsg;
   }
 
   private async auditUnknownTool(
@@ -697,4 +830,9 @@ export class SiftServer {
 
 function sameTenant(a: TenantContext, b: TenantContext): boolean {
   return a.userId === b.userId && a.orgId === b.orgId && a.email === b.email;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value).every((item) => typeof item === "string");
 }

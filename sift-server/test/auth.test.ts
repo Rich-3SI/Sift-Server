@@ -76,6 +76,22 @@ describe("validateApiKey", () => {
   it("returns null for an undefined token", () => {
     assert.equal(validateApiKey(undefined, index), null);
   });
+
+  it("rejects keys that expire after startup", async () => {
+    const liveIndex = buildKeyIndex([
+      {
+        key: "sk-short-lived",
+        userId: "alice",
+        orgId: "org-1",
+        expiresAt: new Date(Date.now() + 20).toISOString(),
+      },
+    ]);
+
+    assert.equal(validateApiKey("sk-short-lived", liveIndex)?.userId, "alice");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(validateApiKey("sk-short-lived", liveIndex), null);
+    assert.equal(liveIndex.has("sk-short-lived"), false);
+  });
 });
 
 describe("validateJwtToken", () => {
@@ -121,17 +137,87 @@ describe("validateJwtToken", () => {
 
   it("rejects expired JWTs", async () => {
     const token = signHs256({
+      iss: "https://issuer.example.test",
+      aud: "sift-server",
       sub: "user-123",
       org_id: "org-123",
       exp: Math.floor(Date.now() / 1000) - 120,
     }, secret);
 
     const tenant = await validateJwtToken(token, {
+      issuer: "https://issuer.example.test",
+      audience: "sift-server",
       hmacSecret: secret,
       clockToleranceSeconds: 0,
     });
 
     assert.equal(tenant, null);
+  });
+
+  it("rejects JWTs without exp by default", async () => {
+    const token = signHs256({
+      iss: "https://issuer.example.test",
+      aud: "sift-server",
+      sub: "user-123",
+      org_id: "org-123",
+    }, secret);
+
+    const tenant = await validateJwtToken(token, {
+      issuer: "https://issuer.example.test",
+      audience: "sift-server",
+      hmacSecret: secret,
+    });
+
+    assert.equal(tenant, null);
+  });
+
+  it("rejects JWTs with malformed exp claims", async () => {
+    const token = signHs256({
+      iss: "https://issuer.example.test",
+      aud: "sift-server",
+      sub: "user-123",
+      org_id: "org-123",
+      exp: "2999-01-01T00:00:00.000Z",
+    }, secret);
+
+    const tenant = await validateJwtToken(token, {
+      issuer: "https://issuer.example.test",
+      audience: "sift-server",
+      hmacSecret: secret,
+      allowMissingExpiration: true,
+    });
+
+    assert.equal(tenant, null);
+  });
+
+
+  it("rejects JWT validation configs without expected issuer or audience by default", async () => {
+    const token = signHs256({
+      iss: "https://issuer.example.test",
+      aud: "sift-server",
+      sub: "user-123",
+      org_id: "org-123",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    }, secret);
+
+    assert.equal(await validateJwtToken(token, { hmacSecret: secret, audience: "sift-server" }), null);
+    assert.equal(await validateJwtToken(token, { hmacSecret: secret, issuer: "https://issuer.example.test" }), null);
+  });
+
+  it("allows explicit local JWT overrides for missing exp, issuer, and audience", async () => {
+    const token = signHs256({
+      sub: "user-123",
+      org_id: "org-123",
+    }, secret);
+
+    const tenant = await validateJwtToken(token, {
+      hmacSecret: secret,
+      allowMissingExpiration: true,
+      allowMissingIssuer: true,
+      allowMissingAudience: true,
+    });
+
+    assert.equal(tenant?.userId, "user-123");
   });
 });
 

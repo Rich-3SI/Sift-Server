@@ -13,7 +13,8 @@ sift-server/sift-server.config.example.json
   "server": {
     "port": 8080,
     "host": "0.0.0.0",
-    "adminPort": 8081
+    "adminPort": 8081,
+    "adminHost": "127.0.0.1"
   },
   "auth": {
     "mode": "api-key",
@@ -46,6 +47,7 @@ sift-server/sift-server.config.example.json
 | `server.port` | `8080` | MCP HTTP endpoint port |
 | `server.host` | `0.0.0.0` | MCP bind host |
 | `server.adminPort` | `8081` | Health/admin endpoint port |
+| `server.adminHost` | `127.0.0.1` | Health/admin bind host |
 | `maxSessions` | `1000` | Maximum active MCP sessions |
 | `sessionTtlMinutes` | `30` | Idle session timeout |
 | `blastRadiusLimit` | `10` | Destructive calls per scoped session before blocking |
@@ -102,6 +104,9 @@ Use `none` only for local testing behind trusted controls.
 ```
 
 For local development only, JWT config can use `hmacSecret` with `HS256`.
+JWTs must include `exp`, and production configs must set expected `issuer` and `audience`.
+Local-only overrides are available as `allowMissingExpiration`, `allowMissingIssuer`, and
+`allowMissingAudience`, but they should not be used for shared or production servers.
 
 ## Upstreams
 

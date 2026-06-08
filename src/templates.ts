@@ -104,15 +104,11 @@ const SANDBOX_FILESYSTEM: RuleTemplate = {
     {
       id: "sandbox-filesystem/path-check",
       description: "Block filesystem tools that target paths outside /tmp",
-      match: `(toolName, input) => {
-        const fsTools = ["read_file","write_file","edit_file","delete_file","list_directory","move_file","create_file"];
-        if (!fsTools.includes(toolName)) return false;
-        const args = input ?? {};
-        const path = args.path ?? args.file_path ?? args.source ?? args.destination ?? "";
-        if (typeof path !== "string") return false;
-        const real = path.replace(/^\\/private/, "");
-        return real !== "" && !real.startsWith("/tmp");
-      }`,
+      match: `() => false`,
+      condition: {
+        tools: ["read_file", "write_file", "edit_file", "delete_file", "list_directory", "move_file", "create_file"],
+        pathOutside: "/tmp",
+      },
       action: "block",
     },
   ],
@@ -311,7 +307,8 @@ const BLOCK_SENSITIVE_PATHS: RuleTemplate = {
         const fsTools = ["read_file","write_file","edit_file","delete_file","list_directory","move_file","create_file","open_file","cat","get_file_contents","read_text_file","read_media_file","read_multiple_files"];
         if (!fsTools.includes(toolName)) return false;
         const args = input ?? {};
-        const paths = [args.path, args.file_path, args.source, args.destination, ...(args.paths ?? [])].filter((p) => typeof p === "string");
+        const morePaths = Array.isArray(args.paths) ? args.paths : [];
+        const paths = [args.path, args.file_path, args.source, args.destination, ...morePaths].filter((p) => typeof p === "string");
         const sensitive = /(\\.ssh|\\/.aws|\\/.gnupg|\\/.config\\/gcloud|\\.env($|\\.)|credentials\\.json|secrets\\.ya?ml|\\/etc\\/passwd|\\/etc\\/shadow|\\.pem$|\\.key$|\\.p12$|\\.pfx$|\\.keystore|id_rsa|id_ed25519|\\.git\\/config|\\.npmrc|\\.pypirc|\\.docker\\/config)/;
         return paths.some((p) => sensitive.test(p));
       }`,
@@ -334,7 +331,8 @@ const BLOCK_CREDENTIAL_FILES: RuleTemplate = {
         const readTools = ["read_file","cat","get_file_contents","open_file","read_text_file","read_media_file","read_multiple_files"];
         if (!readTools.includes(toolName)) return false;
         const args = input ?? {};
-        const paths = [args.path, args.file_path, ...(args.paths ?? [])].filter((p) => typeof p === "string");
+        const morePaths = Array.isArray(args.paths) ? args.paths : [];
+        const paths = [args.path, args.file_path, ...morePaths].filter((p) => typeof p === "string");
         const credFile = /(\\.env($|\\.)|credentials\\.json|secrets\\.ya?ml|service[_-]?account\\.json|\\.pem$|\\.key$|\\.p12$|\\.pfx$|id_rsa|id_ed25519|\\.npmrc|\\.pypirc|\\.netrc|\\.pgpass)/;
         return paths.some((p) => credFile.test(p));
       }`,

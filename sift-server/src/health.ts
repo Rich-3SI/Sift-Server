@@ -18,6 +18,7 @@ import { adminAuth, handleAdmin } from "./admin.js";
 
 export function startHealthServer(
   port: number,
+  host: string,
   pool: UpstreamPool,
   server: SiftServer,
   configStore?: ConfigStore
@@ -37,8 +38,8 @@ export function startHealthServer(
     });
   });
 
-  http.listen(port, "0.0.0.0", () => {
-    process.stderr.write(`[Sift Server] Admin endpoints on http://0.0.0.0:${port}/healthz\n`);
+  http.listen(port, host, () => {
+    process.stderr.write(`[Sift Server] Admin endpoints on http://${host}:${port}/healthz\n`);
   });
   http.unref();
   return http;
