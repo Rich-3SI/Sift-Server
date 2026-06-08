@@ -109,6 +109,18 @@ describe("Sift Server FastMCP integration", () => {
           match: "() => false",
           condition: { tools: ["delete_repo"] },
           action: "block",
+        }, {
+          id: "block-secret-resource",
+          description: "Block secret MCP resources",
+          match: "() => false",
+          condition: { tools: ["mcp.read_resource"], inputContains: { uri: "secret" } },
+          action: "block",
+        }, {
+          id: "block-secret-prompt",
+          description: "Block secret MCP prompts",
+          match: "() => false",
+          condition: { tools: ["mcp.get_prompt"], inputContains: { name: "secret" } },
+          action: "block",
         }],
       },
     });
@@ -134,7 +146,7 @@ describe("Sift Server FastMCP integration", () => {
     });
     await server.start();
 
-    health = startHealthServer(18123, pool, server, configStore);
+    health = startHealthServer(18123, "127.0.0.1", pool, server, configStore);
 
     client = new Client({ name: "fastmcp-test-client", version: "0.1.0" }, { capabilities: {} });
     transport = new StreamableHTTPClientTransport(
@@ -182,13 +194,34 @@ describe("Sift Server FastMCP integration", () => {
     const unknown = await client.callTool({ name: "missing_tool", arguments: { value: "nope" } });
     assert.equal(unknown.isError, true);
 
-    assert.equal(audits.length, 3);
+    assert.equal(audits.length, 5);
+    assert.equal(audits[0]?.tool, "mcp.read_resource");
     assert.equal(audits[0]?.action, "allow");
-    assert.equal(audits[0]?.orgId, "pilot-org");
-    assert.equal(audits[1]?.action, "block");
-    assert.deepEqual(audits[1]?.triggeredRules, ["block-dangerous"]);
-    assert.equal(audits[2]?.action, "block");
-    assert.deepEqual(audits[2]?.triggeredRules, ["unknown-tool"]);
+    assert.equal(audits[1]?.tool, "mcp.get_prompt");
+    assert.equal(audits[1]?.action, "allow");
+    assert.equal(audits[2]?.action, "allow");
+    assert.equal(audits[2]?.orgId, "pilot-org");
+    assert.equal(audits[3]?.action, "block");
+    assert.deepEqual(audits[3]?.triggeredRules, ["block-dangerous"]);
+    assert.equal(audits[4]?.action, "block");
+    assert.deepEqual(audits[4]?.triggeredRules, ["unknown-tool"]);
+  });
+
+  it("enforces policy on MCP resources and prompts", async () => {
+    await assert.rejects(
+      client.readResource({ uri: "fastmcp://secret" }),
+      /block-secret-resource/
+    );
+
+    await assert.rejects(
+      client.getPrompt({ name: "secret-review" }),
+      /block-secret-prompt/
+    );
+
+    const resourceAudit = audits.find((entry) => entry.tool === "mcp.read_resource" && entry.action === "block");
+    assert.deepEqual(resourceAudit?.triggeredRules, ["block-secret-resource"]);
+    const promptAudit = audits.find((entry) => entry.tool === "mcp.get_prompt" && entry.action === "block");
+    assert.deepEqual(promptAudit?.triggeredRules, ["block-secret-prompt"]);
   });
 
   it("requires matching bearer auth on existing sessions", async () => {

@@ -32,7 +32,7 @@ export interface ApiKeyEntry {
   orgId: string;
   email?: string;
   description?: string;
-  /** ISO timestamp after which the key is ignored at startup. */
+  /** ISO timestamp after which the key is no longer accepted. */
   expiresAt?: string;
   /** Revoked keys stay in config for auditability but are not accepted. */
   revoked?: boolean;
@@ -40,9 +40,9 @@ export interface ApiKeyEntry {
 
 /** JWT/OIDC bearer-token validation settings. */
 export interface JwtAuthConfig {
-  /** Expected token issuer (`iss`). Optional for local/dev JWTs. */
+  /** Expected token issuer (`iss`). Required unless allowMissingIssuer is true. */
   issuer?: string;
-  /** Expected token audience (`aud`). Optional when your IdP omits audience. */
+  /** Expected token audience (`aud`). Required unless allowMissingAudience is true. */
   audience?: string | string[];
   /** Remote JWKS endpoint for RS256-signed tokens. */
   jwksUrl?: string;
@@ -60,6 +60,12 @@ export interface JwtAuthConfig {
   defaultOrgId?: string;
   /** Extra claims that must match exactly or be one of the listed values. */
   requiredClaims?: Record<string, string | string[]>;
+  /** Unsafe local/dev override: accept tokens without `exp`. Defaults to false. */
+  allowMissingExpiration?: boolean;
+  /** Unsafe local/dev override: allow JWT config without expected `iss`. Defaults to false. */
+  allowMissingIssuer?: boolean;
+  /** Unsafe local/dev override: allow JWT config without expected `aud`. Defaults to false. */
+  allowMissingAudience?: boolean;
   /** Clock skew allowance in seconds. Defaults to 60. */
   clockToleranceSeconds?: number;
   /** JWKS cache TTL in seconds. Defaults to 300. */

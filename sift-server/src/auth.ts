@@ -37,23 +37,29 @@ type CachedJwks = {
   keys: JsonWebKey[];
 };
 
+export type ApiKeyIndexEntry = TenantContext & {
+  expiresAtMs?: number;
+};
+
 const jwksCache = new Map<string, CachedJwks>();
 
 /**
  * Build an index from bearer token → TenantContext for O(1) lookup.
  * Call once at startup; pass the returned map to validateApiKey().
  */
-export function buildKeyIndex(keys: ApiKeyEntry[]): Map<string, TenantContext> {
-  const index = new Map<string, TenantContext>();
+export function buildKeyIndex(keys: ApiKeyEntry[]): Map<string, ApiKeyIndexEntry> {
+  const index = new Map<string, ApiKeyIndexEntry>();
   const now = Date.now();
   for (const k of keys) {
     if (k.revoked === true) continue;
-    if (k.expiresAt && Date.parse(k.expiresAt) <= now) continue;
+    const expiresAtMs = k.expiresAt ? Date.parse(k.expiresAt) : undefined;
+    if (expiresAtMs !== undefined && expiresAtMs <= now) continue;
     index.set(k.key, {
       userId: k.userId,
       orgId: k.orgId,
       email: k.email,
       description: k.description,
+      expiresAtMs,
     });
   }
   return index;
@@ -79,10 +85,17 @@ export function extractBearerToken(req: IncomingMessage): string | undefined {
  */
 export function validateApiKey(
   token: string | undefined,
-  keyIndex: Map<string, TenantContext>
+  keyIndex: Map<string, ApiKeyIndexEntry>
 ): TenantContext | null {
   if (!token) return null;
-  return keyIndex.get(token) ?? null;
+  const entry = keyIndex.get(token);
+  if (!entry) return null;
+  if (entry.expiresAtMs !== undefined && entry.expiresAtMs <= Date.now()) {
+    keyIndex.delete(token);
+    return null;
+  }
+  const { expiresAtMs: _expiresAtMs, ...tenant } = entry;
+  return tenant;
 }
 
 export async function validateJwtToken(
@@ -90,6 +103,8 @@ export async function validateJwtToken(
   config: JwtAuthConfig | undefined
 ): Promise<TenantContext | null> {
   if (!token || !config) return null;
+  if (!config.allowMissingIssuer && !config.issuer) return null;
+  if (!config.allowMissingAudience && !config.audience) return null;
 
   const parsed = parseJwt(token);
   if (!parsed) return null;
@@ -228,7 +243,14 @@ function validateRegisteredClaims(payload: JwtPayload, config: JwtAuthConfig): b
   const now = Math.floor(Date.now() / 1000);
   const tolerance = config.clockToleranceSeconds ?? 60;
 
-  if (typeof payload.exp === "number" && payload.exp <= now - tolerance) return false;
+  if (payload.exp === undefined) {
+    if (!config.allowMissingExpiration) return false;
+  } else if (typeof payload.exp !== "number") {
+    return false;
+  } else if (payload.exp <= now - tolerance) {
+    return false;
+  }
+  if (payload.nbf !== undefined && typeof payload.nbf !== "number") return false;
   if (typeof payload.nbf === "number" && payload.nbf > now + tolerance) return false;
   if (config.issuer && payload.iss !== config.issuer) return false;
   if (config.audience && !audienceMatches(payload.aud, config.audience)) return false;

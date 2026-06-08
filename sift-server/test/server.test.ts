@@ -129,7 +129,7 @@ describe("SiftServer admin health endpoints", () => {
     });
     const previous = process.env["SIFT_ADMIN_SECRET"];
     process.env["SIFT_ADMIN_SECRET"] = "admin-test-secret";
-    const health = startHealthServer(18082, pool, server, configStore);
+    const health = startHealthServer(18082, "127.0.0.1", pool, server, configStore);
 
     try {
       const statsWithoutSecret = await fetchJson("http://127.0.0.1:18082/stats");

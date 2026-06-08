@@ -92,7 +92,8 @@ Example production shape:
   "server": {
     "host": "0.0.0.0",
     "port": 8080,
-    "adminPort": 8081
+    "adminPort": 8081,
+    "adminHost": "127.0.0.1"
   },
   "auth": {
     "mode": "api-key",
@@ -169,6 +170,10 @@ docker run --name sift-server \
 ```
 
 The example binds both ports to `127.0.0.1` so a reverse proxy can front the service. If you bind to a public interface, expose only the MCP path through a protected TLS layer and keep admin paths restricted.
+
+For Docker deployments that publish the admin port to host loopback, set
+`server.adminHost` to `0.0.0.0` inside the container and keep the Docker port
+mapping restricted to `127.0.0.1` or another trusted interface.
 
 ## Run With Docker Compose
 

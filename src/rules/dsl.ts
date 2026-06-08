@@ -1,3 +1,5 @@
+import { isAbsolute, relative, resolve } from "node:path";
+
 export interface RuleCondition {
   tools?: string[];
   toolPattern?: string;
@@ -8,10 +10,39 @@ export interface RuleCondition {
   sqlDdl?: boolean;
 }
 
-function readPath(input: unknown): string {
-  if (!input || typeof input !== "object") return "";
-  const candidate = (input as Record<string, unknown>)["path"];
-  return typeof candidate === "string" ? candidate : "";
+const PATH_KEYS = ["path", "file_path", "source", "destination", "directory", "dir", "cwd"];
+
+function readPaths(input: unknown): string[] {
+  if (!input || typeof input !== "object") return [];
+  const record = input as Record<string, unknown>;
+  const paths: string[] = [];
+
+  for (const key of PATH_KEYS) {
+    const candidate = record[key];
+    if (typeof candidate === "string") paths.push(candidate);
+  }
+
+  const pathList = record["paths"];
+  if (Array.isArray(pathList)) {
+    for (const candidate of pathList) {
+      if (typeof candidate === "string") paths.push(candidate);
+    }
+  }
+
+  return paths;
+}
+
+function isPathInside(target: string, base: string): boolean {
+  const resolvedBase = normalizePathForPolicy(resolve(base));
+  const resolvedTarget = normalizePathForPolicy(isAbsolute(target)
+    ? resolve(target)
+    : resolve(resolvedBase, target));
+  const relationship = relative(resolvedBase, resolvedTarget);
+  return relationship === "" || (!relationship.startsWith("..") && !isAbsolute(relationship));
+}
+
+function normalizePathForPolicy(path: string): string {
+  return path.replace(/^\/private\/(tmp|var|etc)(?=\/|$)/, "/$1");
 }
 
 function readSql(input: unknown): string {
@@ -38,12 +69,15 @@ export function evaluateRuleCondition(
   if (condition.tools && !condition.tools.includes(toolName)) return false;
   if (condition.toolPattern && !new RegExp(condition.toolPattern, "i").test(toolName)) return false;
 
-  const path = readPath(input);
-  if (condition.pathIncludes?.length && !condition.pathIncludes.some((needle) => path.includes(needle))) {
+  const paths = readPaths(input);
+  if (condition.pathIncludes?.length && !paths.some((path) => condition.pathIncludes!.some((needle) => path.includes(needle)))) {
     return false;
   }
-  if (condition.pathOutside && (!path || path.startsWith(condition.pathOutside))) {
-    return false;
+  if (condition.pathOutside) {
+    if (paths.length === 0) return true;
+    if (!paths.some((path) => !isPathInside(path, condition.pathOutside!))) {
+      return false;
+    }
   }
 
   if (condition.inputContains) {

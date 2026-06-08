@@ -112,6 +112,54 @@ describe("loadServerConfig", () => {
     rmSync(path, { force: true });
   });
 
+  it("rejects jwt auth without expected issuer by default", () => {
+    const path = withTempConfig({
+      upstreams: [{ name: "fs", command: ["echo"] }],
+      auth: {
+        mode: "jwt",
+        jwt: {
+          audience: "sift-server",
+          hmacSecret: "dev-secret",
+        },
+      },
+    });
+    assert.throws(() => loadServerConfig(path), /issuer is required/i);
+    rmSync(path, { force: true });
+  });
+
+  it("rejects jwt auth without expected audience by default", () => {
+    const path = withTempConfig({
+      upstreams: [{ name: "fs", command: ["echo"] }],
+      auth: {
+        mode: "jwt",
+        jwt: {
+          issuer: "https://issuer.example.test",
+          hmacSecret: "dev-secret",
+        },
+      },
+    });
+    assert.throws(() => loadServerConfig(path), /audience is required/i);
+    rmSync(path, { force: true });
+  });
+
+  it("accepts explicit local jwt issuer and audience overrides", () => {
+    const path = withTempConfig({
+      upstreams: [{ name: "fs", command: ["echo"] }],
+      auth: {
+        mode: "jwt",
+        jwt: {
+          hmacSecret: "dev-secret",
+          allowMissingIssuer: true,
+          allowMissingAudience: true,
+          allowMissingExpiration: true,
+        },
+      },
+    });
+    const cfg = loadServerConfig(path);
+    assert.equal(cfg.auth?.jwt?.allowMissingIssuer, true);
+    rmSync(path, { force: true });
+  });
+
   it("rejects jwt auth with no verification material", () => {
     const path = withTempConfig({
       upstreams: [{ name: "fs", command: ["echo"] }],
@@ -163,6 +211,7 @@ describe("resolveServerOptions", () => {
     assert.equal(opts.port, DEFAULTS.port);
     assert.equal(opts.host, DEFAULTS.host);
     assert.equal(opts.adminPort, DEFAULTS.adminPort);
+    assert.equal(opts.adminHost, DEFAULTS.adminHost);
     assert.equal(opts.maxSessions, DEFAULTS.maxSessions);
     assert.equal(opts.blastRadiusLimit, DEFAULTS.blastRadiusLimit);
     assert.equal(opts.rateLimitPerMinute, DEFAULTS.rateLimitPerMinute);
@@ -173,7 +222,7 @@ describe("resolveServerOptions", () => {
   it("respects explicit values over defaults", () => {
     const opts = resolveServerOptions({
       upstreams: [{ name: "fs", command: ["echo"] }],
-      server: { port: 9090, host: "127.0.0.1", adminPort: 9091 },
+      server: { port: 9090, host: "127.0.0.1", adminPort: 9091, adminHost: "0.0.0.0" },
       maxSessions: 50,
       sessionTtlMinutes: 5,
       blastRadiusLimit: 3,
@@ -182,6 +231,7 @@ describe("resolveServerOptions", () => {
     assert.equal(opts.port, 9090);
     assert.equal(opts.host, "127.0.0.1");
     assert.equal(opts.adminPort, 9091);
+    assert.equal(opts.adminHost, "0.0.0.0");
     assert.equal(opts.maxSessions, 50);
     assert.equal(opts.sessionTtlMs, 5 * 60_000);
     assert.equal(opts.blastRadiusLimit, 3);

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { evaluateRules, type SiftRule } from "../src/rules/index.js";
+import { resolveTemplates } from "../src/templates.js";
 
 describe("evaluateRules", () => {
   const rules: SiftRule[] = [
@@ -54,15 +55,14 @@ describe("evaluateRules", () => {
     assert.deepEqual(result.triggeredRules, []);
   });
 
-  it("handles malformed rule match gracefully", () => {
+  it("fails closed when a malformed block rule cannot be evaluated", () => {
     const badRules: SiftRule[] = [
       { id: "bad", description: "Broken", match: "this is not valid js", action: "block" },
       { id: "fallback", description: "Fallback", match: "() => true", action: "allow" },
     ];
     const result = evaluateRules(badRules, "anything", {});
-    // Bad rule should be skipped, fallback should match
-    assert.equal(result.action, "allow");
-    assert.deepEqual(result.triggeredRules, ["fallback"]);
+    assert.equal(result.action, "block");
+    assert.deepEqual(result.triggeredRules, ["bad"]);
   });
 
   it("passes input correctly to predicate", () => {
@@ -101,9 +101,17 @@ describe("evaluateRules", () => {
       evaluateRules(dslRules, "write_file", { path: "/Users/alice/project/README.md" }).action,
       "allow"
     );
+    assert.equal(
+      evaluateRules(dslRules, "write_file", { path: "/Users/alice/project-evil/README.md" }).action,
+      "block"
+    );
+    assert.equal(
+      evaluateRules(dslRules, "write_file", { path: "/Users/alice/project/../.ssh/config" }).action,
+      "block"
+    );
   });
 
-  it("skips unsafe custom predicates", () => {
+  it("fails closed on unsafe custom block predicates", () => {
     const unsafeRules: SiftRule[] = [
       {
         id: "unsafe",
@@ -114,7 +122,51 @@ describe("evaluateRules", () => {
     ];
 
     const result = evaluateRules(unsafeRules, "write_file", {});
+    assert.equal(result.action, "block");
+    assert.deepEqual(result.triggeredRules, ["unsafe"]);
+  });
+
+  it("skips unsafe custom allow predicates", () => {
+    const unsafeRules: SiftRule[] = [
+      {
+        id: "unsafe-allow",
+        description: "Attempt to reach process",
+        match: "() => typeof process !== 'undefined'",
+        action: "allow",
+      },
+    ];
+
+    const result = evaluateRules(unsafeRules, "write_file", {});
     assert.equal(result.action, "allow");
     assert.deepEqual(result.triggeredRules, []);
+  });
+
+  it("runs built-in sensitive-file templates through the trusted policy path", () => {
+    for (const policy of ["block-sensitive-paths", "block-credential-files"]) {
+      const result = evaluateRules(
+        resolveTemplates([policy]),
+        "read_file",
+        { path: "/Users/alice/.ssh/id_rsa", paths: {} }
+      );
+      assert.equal(result.action, "block");
+      assert.equal(result.triggeredRules.length, 1);
+    }
+  });
+
+  it("matches exposed and original tool names when aliases are provided", () => {
+    const rules: SiftRule[] = [
+      {
+        id: "block-prefixed-read",
+        description: "Block one upstream read tool",
+        match: "(toolName) => toolName === 'filesystem__read_file'",
+        action: "block",
+      },
+    ];
+
+    const exposed = evaluateRules(rules, "filesystem__read_file", { path: "/tmp/a" }, ["read_file"]);
+    assert.equal(exposed.action, "block");
+
+    const originalOnly = evaluateRules(resolveTemplates(["block-filesystem-reads"]), "filesystem__read_file", { path: "/tmp/a" }, ["read_file"]);
+    assert.equal(originalOnly.action, "block");
   });
 });

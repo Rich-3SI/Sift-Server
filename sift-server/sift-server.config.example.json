@@ -2,7 +2,8 @@
   "server": {
     "port": 8080,
     "host": "0.0.0.0",
-    "adminPort": 8081
+    "adminPort": 8081,
+    "adminHost": "127.0.0.1"
   },
   "auth": {
     "mode": "api-key-or-jwt",

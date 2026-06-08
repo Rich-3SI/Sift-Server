@@ -40,6 +40,7 @@ export interface SiftServerConfig extends SiftConfig {
     port?: number;
     host?: string;
     adminPort?: number;
+    adminHost?: string;
   };
   auth?: {
     mode?: AuthMode;
@@ -59,6 +60,7 @@ export interface ResolvedServerOptions {
   port: number;
   host: string;
   adminPort: number;
+  adminHost: string;
   authMode: AuthMode;
   apiKeys: ApiKeyEntry[];
   jwt?: JwtAuthConfig;
@@ -75,6 +77,7 @@ export const DEFAULTS: ResolvedServerOptions = {
   port: 8080,
   host: "0.0.0.0",
   adminPort: 8081,
+  adminHost: "127.0.0.1",
   authMode: "api-key",
   apiKeys: [],
   jwt: undefined,
@@ -104,6 +107,7 @@ export function resolveServerOptions(cfg: SiftServerConfig): ResolvedServerOptio
     port: cfg.server?.port ?? DEFAULTS.port,
     host: cfg.server?.host ?? DEFAULTS.host,
     adminPort: cfg.server?.adminPort ?? DEFAULTS.adminPort,
+    adminHost: cfg.server?.adminHost ?? DEFAULTS.adminHost,
     authMode: cfg.auth?.mode ?? DEFAULTS.authMode,
     apiKeys: cfg.auth?.apiKeys ?? [],
     jwt: cfg.auth?.jwt,
@@ -200,6 +204,16 @@ function validateServerConfig(cfg: SiftServerConfig): void {
 function validateJwtConfig(jwt: JwtAuthConfig): void {
   if (!jwt.jwksUrl && !jwt.jwks?.length && !jwt.hmacSecret) {
     throw new Error("sift-server config: auth.jwt requires jwksUrl, jwks, or hmacSecret.");
+  }
+  if (!jwt.allowMissingIssuer && !jwt.issuer) {
+    throw new Error(
+      "sift-server config: auth.jwt.issuer is required. Set allowMissingIssuer=true only for local development."
+    );
+  }
+  if (!jwt.allowMissingAudience && !jwt.audience) {
+    throw new Error(
+      "sift-server config: auth.jwt.audience is required. Set allowMissingAudience=true only for local development."
+    );
   }
   if (jwt.allowedAlgorithms?.some((alg) => alg.toLowerCase() === "none")) {
     throw new Error("sift-server config: auth.jwt.allowedAlgorithms must not include 'none'.");

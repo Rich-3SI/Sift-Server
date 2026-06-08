@@ -28,6 +28,15 @@ const predicateCache = new Map<string, (toolName: string, input: unknown) => boo
 /** Maximum time (ms) allowed for a single rule predicate execution. */
 const PREDICATE_TIMEOUT_MS = 100;
 
+function failClosedIfNeeded(
+  rule: SiftRule,
+  triggeredRules: string[]
+): RuleEvaluationResult | null {
+  if (rule.action !== "block" && rule.action !== "redact") return null;
+  triggeredRules.push(rule.id);
+  return { action: "block", triggeredRules };
+}
+
 /**
  * Execute a predicate with a synchronous timeout guard.
  * Uses a Promise.race approach with AbortController to enforce the timeout.
@@ -58,19 +67,23 @@ function executeWithGuard(
 export function evaluateRules(
   rules: SiftRule[],
   toolName: string,
-  input: unknown
+  input: unknown,
+  toolAliases: string[] = []
 ): RuleEvaluationResult {
   const triggeredRules: string[] = [];
+  const toolNames = [...new Set([toolName, ...toolAliases])];
 
   for (const rule of rules) {
     try {
       let matched = false;
       if (rule.condition) {
-        matched = evaluateRuleCondition(rule.condition, toolName, input);
+        matched = toolNames.some((name) => evaluateRuleCondition(rule.condition!, name, input));
       } else if (!rule.trusted && !isSafeRuleMatch(rule.match)) {
         process.stderr.write(
           `[Sift] Rule "${rule.id}" blocked — contains unsafe code patterns\n`
         );
+        const failClosed = failClosedIfNeeded(rule, triggeredRules);
+        if (failClosed) return failClosed;
         continue;
       } else {
         // Use cached predicate if available, otherwise compile and cache
@@ -84,7 +97,7 @@ export function evaluateRules(
           ) as (toolName: string, input: unknown) => boolean;
           predicateCache.set(rule.match, predicate);
         }
-        matched = executeWithGuard(predicate, toolName, input);
+        matched = toolNames.some((name) => executeWithGuard(predicate, name, input));
       }
 
       if (matched) {
@@ -102,6 +115,8 @@ export function evaluateRules(
       process.stderr.write(
         `[Sift] Rule "${rule.id}" evaluation error: ${String(err)}\n`
       );
+      const failClosed = failClosedIfNeeded(rule, triggeredRules);
+      if (failClosed) return failClosed;
     }
   }
 

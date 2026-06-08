@@ -1,10 +1,11 @@
 # Sift Server — MCP security firewall.
 #
 # Build: docker build -f sift-server/Dockerfile -t sift-server:latest .
-# Run:   docker run -p 8080:8080 -p 8081:8081 \
+# Run:   docker run -p 8080:8080 \
 #          -v /etc/sift-server/config.json:/etc/sift-server/config.json \
 #          -e SIFT_ADMIN_SECRET=... \
 #          sift-server:latest
+# Map 8081 only when server.adminHost is explicitly set for a trusted network.
 #
 # IMPORTANT: the build context must be the REPO ROOT because sift-server's
 # source imports from ../src/*. Use `-f sift-server/Dockerfile .` from root.

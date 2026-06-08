@@ -41,6 +41,7 @@ Sift Server supports:
 - Mixed `api-key-or-jwt` mode for migrations.
 
 Production deployments should prefer JWT/JWKS or another centrally managed identity source over long-lived static keys.
+JWT deployments should validate `exp`, `iss`, and `aud`; Sift Server requires those checks by default unless explicit local-development overrides are configured.
 
 ## Metadata Scanning
 
@@ -79,7 +80,7 @@ For stronger isolation, run upstream MCP servers in containers or another sandbo
 
 ## Deployment Guidance
 
-- Bind admin endpoints to a trusted network.
+- Keep admin endpoints on `127.0.0.1` or another trusted interface.
 - Set `SIFT_ADMIN_SECRET`.
 - Rotate quickstart or demo credentials before shared use.
 - Export audits to your logging system.
